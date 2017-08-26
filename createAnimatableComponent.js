@@ -101,6 +101,7 @@ function transitionToValue(
   easing,
   useNativeDriver = false,
   delay,
+  cb
 ) {
   if (duration || easing || delay) {
     Animated.timing(transitionValue, {
@@ -111,9 +112,10 @@ function transitionToValue(
         ? easing
         : EASING_FUNCTIONS[easing || 'ease'],
       useNativeDriver,
-    }).start();
+    }).start(function() { if(cb) { cb() } });
   } else {
-    Animated.spring(transitionValue, { toValue, useNativeDriver }).start();
+    Animated.spring(transitionValue, { toValue, useNativeDriver })
+    .start(function() { if(cb) { cb() } });
   }
 }
 
@@ -411,111 +413,134 @@ export default function createAnimatableComponent(WrappedComponent) {
     }
 
     transition(fromValues, toValues, duration, easing) {
-      const fromValuesFlat = flattenStyle(fromValues);
-      const toValuesFlat = flattenStyle(toValues);
-      const transitionKeys = Object.keys(toValuesFlat);
-      const {
-        transitionValues,
-        currentTransitionValues,
-        transitionStyle,
-      } = this.getTransitionState(transitionKeys);
+      var tempRef = this;
 
-      transitionKeys.forEach(property => {
-        const fromValue = fromValuesFlat[property];
-        const toValue = toValuesFlat[property];
-        let transitionValue = transitionValues[property];
-        if (!transitionValue) {
-          transitionValue = new Animated.Value(0);
-        }
-        const needsInterpolation =
-          INTERPOLATION_STYLE_PROPERTIES.indexOf(property) !== -1;
-        const needsZeroClamping =
-          ZERO_CLAMPED_STYLE_PROPERTIES.indexOf(property) !== -1;
-        if (needsInterpolation) {
-          transitionValue.setValue(0);
-          transitionStyle[property] = transitionValue.interpolate({
-            inputRange: [0, 1],
-            outputRange: [fromValue, toValue],
-          });
-          currentTransitionValues[property] = toValue;
-          toValuesFlat[property] = 1;
-        } else {
-          if (needsZeroClamping) {
+      return new Promise((resolve, reject) => {
+        const fromValuesFlat = flattenStyle(fromValues);
+        const toValuesFlat = flattenStyle(toValues);
+        const transitionKeys = Object.keys(toValuesFlat);
+        const {
+          transitionValues,
+          currentTransitionValues,
+          transitionStyle,
+        } = tempRef.getTransitionState(transitionKeys);
+  
+        transitionKeys.forEach(property => {
+          const fromValue = fromValuesFlat[property];
+          const toValue = toValuesFlat[property];
+          let transitionValue = transitionValues[property];
+          if (!transitionValue) {
+            transitionValue = new Animated.Value(0);
+          }
+          const needsInterpolation =
+            INTERPOLATION_STYLE_PROPERTIES.indexOf(property) !== -1;
+          const needsZeroClamping =
+            ZERO_CLAMPED_STYLE_PROPERTIES.indexOf(property) !== -1;
+          if (needsInterpolation) {
+            transitionValue.setValue(0);
             transitionStyle[property] = transitionValue.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 1],
-              extrapolateLeft: 'clamp',
+              outputRange: [fromValue, toValue],
             });
             currentTransitionValues[property] = toValue;
+            toValuesFlat[property] = 1;
           } else {
-            transitionStyle[property] = transitionValue;
+            if (needsZeroClamping) {
+              transitionStyle[property] = transitionValue.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 1],
+                extrapolateLeft: 'clamp',
+              });
+              currentTransitionValues[property] = toValue;
+            } else {
+              transitionStyle[property] = transitionValue;
+            }
+            transitionValue.setValue(fromValue);
           }
-          transitionValue.setValue(fromValue);
-        }
+        });
+        tempRef.setState(
+          { transitionValues, transitionStyle, currentTransitionValues },
+          () => {
+            tempRef.transitionToValues(
+              toValuesFlat,
+              duration || tempRef.props.duration,
+              easing,
+              tempRef.props.delay,
+              resolve
+            );
+          },
+        );
       });
-      this.setState(
-        { transitionValues, transitionStyle, currentTransitionValues },
-        () => {
-          this.transitionToValues(
-            toValuesFlat,
-            duration || this.props.duration,
-            easing,
-            this.props.delay,
-          );
-        },
-      );
     }
 
-    transitionTo(toValues, duration, easing, delay) {
-      const { currentTransitionValues } = this.state;
-      const toValuesFlat = flattenStyle(toValues);
-      const transitions = {
-        from: {},
-        to: {},
-      };
-
-      Object.keys(toValuesFlat).forEach(property => {
-        const toValue = toValuesFlat[property];
-        const needsInterpolation =
-          INTERPOLATION_STYLE_PROPERTIES.indexOf(property) !== -1;
-        const needsZeroClamping =
-          ZERO_CLAMPED_STYLE_PROPERTIES.indexOf(property) !== -1;
-        const transitionStyle = this.state.transitionStyle[property];
-        const transitionValue = this.state.transitionValues[property];
-        if (
-          !needsInterpolation &&
-          !needsZeroClamping &&
-          transitionStyle &&
-          transitionStyle === transitionValue
-        ) {
-          transitionToValue(
-            transitionValue,
-            toValue,
-            duration,
-            easing,
-            this.props.useNativeDriver,
-            delay,
-          );
-        } else {
-          let currentTransitionValue = currentTransitionValues[property];
+    transitionTo(toValues, duration, easing, delay, callback) {
+      var tempRef = this;
+      
+      return new Promise(function(resolve, reject) {
+        const { currentTransitionValues } = tempRef.state;
+        const toValuesFlat = flattenStyle(toValues);
+        const transitions = {
+          from: {},
+          to: {},
+        };
+        var _iterationTotal = Object.keys(toValuesFlat).length;
+        var _iterationCount = 0;
+        Object.keys(toValuesFlat).forEach(property => {
+          const toValue = toValuesFlat[property];
+          const needsInterpolation =
+            INTERPOLATION_STYLE_PROPERTIES.indexOf(property) !== -1;
+          const needsZeroClamping =
+            ZERO_CLAMPED_STYLE_PROPERTIES.indexOf(property) !== -1;
+          const transitionStyle = tempRef.state.transitionStyle[property];
+          const transitionValue = tempRef.state.transitionValues[property];
           if (
-            typeof currentTransitionValue === 'undefined' &&
-            this.props.style
+            !needsInterpolation &&
+            !needsZeroClamping &&
+            transitionStyle &&
+            transitionStyle === transitionValue
           ) {
-            const style = getStyleValues(property, this.props.style);
-            currentTransitionValue = style[property];
+            transitionToValue(
+              transitionValue,
+              toValue,
+              duration,
+              easing,
+              tempRef.props.useNativeDriver,
+              delay,
+              function() {
+                _iterationCount++;
+                if(_iterationTotal == _iterationCount)
+                {
+                  resolve();
+                }
+              }
+            );
+          } else {
+            let currentTransitionValue = currentTransitionValues[property];
+            if (
+              typeof currentTransitionValue === 'undefined' &&
+              tempRef.props.style
+            ) {
+              const style = getStyleValues(property, tempRef.props.style);
+              currentTransitionValue = style[property];
+            }
+            transitions.from[property] = currentTransitionValue;
+            transitions.to[property] = toValue;
           }
-          transitions.from[property] = currentTransitionValue;
-          transitions.to[property] = toValue;
+        });
+        
+  
+        if (Object.keys(transitions.from).length) {
+          tempRef.transition(transitions.from, transitions.to, duration, easing).then(function() {
+            resolve();
+          });
         }
       });
-
-      if (Object.keys(transitions.from).length) {
-        this.transition(transitions.from, transitions.to, duration, easing);
-      }
     }
 
-    transitionToValues(toValues, duration, easing, delay) {
+    transitionToValues(toValues, duration, easing, delay, cb) {
+      var _iterationTotal = Object.keys(toValues).length;
+      var _iterationCount = 0;
+
       Object.keys(toValues).forEach(property => {
         const transitionValue = this.state.transitionValues[property];
         const toValue = toValues[property];
@@ -526,6 +551,16 @@ export default function createAnimatableComponent(WrappedComponent) {
           easing,
           this.props.useNativeDriver,
           delay,
+          function() {
+            _iterationCount++;
+            if(_iterationCount == _iterationTotal)
+            {
+              if(cb)
+              {
+                cb();  
+              }
+            } 
+          }
         );
       });
     }
