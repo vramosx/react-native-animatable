@@ -1,9 +1,20 @@
 # react-native-animatable
 Easy to use declarative transitions and a standard set of animations for React Native
 
+Original project: https://github.com/oblador/react-native-animatable
+
+# What's new?
+Added promise for functions 'transitionTo' and 'transition'. Now you can use them like that:
+
+`this.refs.objectRef.transitionTo({ opacity: 0 }).then(() => alert('Hey! Transition ends!'));`
+
+or:
+
+`this.refs.objectRef.transition({ opacity: 1 }, { opacity: 0 }).then(() => alert('Hey! Transition ends!'));`
+
 ## Installation
 
-`$ npm install react-native-animatable --save`
+`$ npm install react-native-animatable-promise --save`
 
 ## Usage
 
