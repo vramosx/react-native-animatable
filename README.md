@@ -21,7 +21,7 @@ or:
 To animate things you must use the `createAnimatableComponent` composer similar to the `Animated.createAnimatedComponent`. The common components `View`, `Text` and `Image` are precomposed and exposed under the `Animatable` namespace. If you have your own component that you wish to animate, simply wrap it with a `Animatable.View` or compose it with:
 
 ```js
-import * as Animatable from 'react-native-animatable';
+import * as Animatable from 'react-native-animatable-promise';
 MyCustomComponent = Animatable.createAnimatableComponent(MyCustomComponent);
 ```
 
